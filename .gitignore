@@ -1,0 +1,7 @@
+target
+project/target
+*.class
+*.log
+*.jpg
+*.png
+.idea
