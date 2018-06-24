@@ -11,8 +11,6 @@ import scala.util.Random
 class Vector(var x: Double, var y: Double, var z: Double) {
     def sqr: Double = this * this
 
-    def *(v: Vector): Double = x * v.x + y * v.y + z * v.z
-
     override def toString: String = "(" + x + "," + y + "," + z + ")"
 
     def +(v: Vector): Vector = new Vector(x + v.x, y + v.y, z + v.z)
@@ -31,6 +29,8 @@ class Vector(var x: Double, var y: Double, var z: Double) {
     def angle(v: Vector): Double = {
         Math.acos(this * v / (norm * v.norm))
     }
+
+    def *(v: Vector): Double = x * v.x + y * v.y + z * v.z
 
     def norm(): Double = Math.sqrt(x * x + y * y + z * z)
 
@@ -151,8 +151,8 @@ class Patch(val x: Int, val y: Int) {
         val l = (-DV + AD * AV) / (1 - AD * AD) / lineD.norm
         val s = (-DV * AD + AV) / (1 - AD * AD) / A.norm
 
-        transmission = 1-s
-//        println("t", transmission)
+        transmission = 1 - s
+        //        println("t", transmission)
         val v = lineD * l + V - A * s
         val d = v * v
 //        println(transmission, d)
@@ -192,7 +192,7 @@ class Patch(val x: Int, val y: Int) {
                 tx = dx + x
                 ty = dy + y
                 if (significant(dx)(dy)) {
-                    t(tx)(ty) = (t(tx)(ty) * countT(tx)(ty) + transmission) / (countT(tx)(ty) + 1) * 1.4
+                    t(tx)(ty) = (t(tx)(ty) * countT(tx)(ty) + transmission) / (countT(tx)(ty) + 1) * 1.5
                     if (t(tx)(ty) > 1) t(tx)(ty) = 1
 //                    println(t(tx)(ty))
                     countT(tx)(ty) += 1
@@ -227,17 +227,17 @@ object Util {
 
     def inBoard(x: Int, y: Int, height: Int, width: Int) = x >= 0 && x < height && y >= 0 && y < width
 
-    def gaussian(x: Double, sigma: Double):Double = {
+    def gaussian(x: Double, sigma: Double): Double = {
         Math.exp(-x * x / (2 * sqr(sigma))) / (sigma * Math.sqrt(2 * Math.PI))
     }
 
-    def sqr(x: Double)=x*x
+    def sqr(x: Double) = x * x
 }
 
 object Dehaze {
     val filename = "/Users/qzq/code/DehazingUsingColorLines/tam.png"
     val outputFilename = "/Users/qzq/code/DehazingUsingColorLines/out.jpg"
-//            var A = Vector(0.94, 0.97, 0.986)
+    //            var A = Vector(0.94, 0.97, 0.986)
 //    var A = Vector(0.65, 0.7, 0.71)
 //    var A = Vector(0.9, 0.97, 0.988)
 //var A = Vector(0.755, 0.77, 0.77)
@@ -246,7 +246,7 @@ object Dehaze {
 //    var A = Vector(0.81, 0.81, 0.82)
 //    var A = Vector(0.8, 0.8, 0.816)
 //    var A = Vector(0.53 ,0.53 ,0.53)
-//    var A  = Vector(0.67 ,0.72 ,0.825)
+//var A = Vector(0.575, 0.6125 ,0.7)
 
     def main(args: Array[String]): Unit = {
 //        A.x = scala.io.StdIn.readDouble()
@@ -295,9 +295,9 @@ object Dehaze {
 
         //		interpolate and regularization
         println("interpolating ...")
-//        var tt = laplacianInterpolation(t)
+        //        var tt = laplacianInterpolation(t)
 //        uniform(tt, m)
-        val tt = gradientDecent(t, m)
+val tt = gradientDecent(t, m)
 
 //        val tt = Array.fill[Double](height, width)(0.8)
         println("recovering ...")
@@ -356,44 +356,6 @@ object Dehaze {
         rt
     }
 
-    def laplacianInterpolation(t: Array[Array[Double]]): Array[Array[Double]] = {
-        val height = t.length
-        val width = t(0).length
-        val tt = Array.fill[Double](height, width)(Double.NaN)
-        for (i <- 0 until height)
-            for (j <- 0 until width) {
-                if (t(i)(j) > 0) tt(i)(j) = t(i)(j)
-            }
-        println("interpolate error:" + LaplaceInterpolation.interpolate(tt, 0.001))
-        tt
-    }
-
-    def uniform(tt: Array[Array[Double]], m: Array[Array[Array[Double]]]): Unit = {
-        val height = tt.length
-        val width = tt(0).length
-        val sigma = 3//Math.sqrt(Util.sqr(height)+Util.sqr(width))*0.015
-        val n_epoch = 1
-        for (ep <- 0 until n_epoch) {
-            for (i <- 0 until height)
-                for (j <- 0 until width) {
-                    var sum = 0.0
-                    var sum_weight = 0.0
-                    val c0 = Vector(m(i)(j)(0),m(i)(j)(1),m(i)(j)(2))
-                    for (dx <- -10 to 10)
-                        for (dy <- -10 to 10)
-                            if (Util.inBoard(i + dx, j + dy, height, width)) {
-                                val tx = i + dx
-                                val ty = j + dy
-                                val ct = Vector(m(tx)(ty)(0),m(tx)(ty)(1),m(tx)(ty)(2))
-                                var weight = Util.gaussian(dx * dx + dy * dy, sigma) * (c0-ct).sqr
-                                sum_weight += weight
-                                sum += tt(tx)(ty) * weight
-                            }
-                    tt(i)(j) = sum / sum_weight
-                }
-        }
-    }
-
     def gradientDecent(raw_t: Array[Array[Double]], m: Array[Array[Array[Double]]]): Array[Array[Double]] = {
         val height = raw_t.length
         val width = raw_t(0).length
@@ -432,7 +394,8 @@ object Dehaze {
                                 if (Util.inBoard(tx, ty, height, width)) {
                                     val Ix = Vector(m(i)(j)(0), m(i)(j)(1), m(i)(j)(2))
                                     val Iy = Vector(m(tx)(ty)(0), m(tx)(ty)(1), m(tx)(ty)(2))
-                                    gradient(i)(j) += 0.02 * (t(i)(j) - t(tx)(ty)) / ((Ix - Iy).sqr+0.005)
+                                    gradient(i)(j) += 0.02 * (t(i)(j) - t(tx)(ty)) / ((Ix - Iy).sqr + 0.005) /// Math
+                                        //.sqrt(dx * dx + dy * dy)
 //                                    println("N",2 * (t(i)(j) - t(tx)(ty)) / ((Ix - Iy).sqr+0.5))
 //                                    if (Math.abs(2 * (t(i)(j) - t(tx)(ty)) / ((Ix - Iy).sqr+0.5)) < 0.0001)
 //                                        println(t(i)(j), t(tx)(ty))
@@ -459,6 +422,45 @@ object Dehaze {
             lr *= decay_rate
         }
         t
+    }
+
+    def laplacianInterpolation(t: Array[Array[Double]]): Array[Array[Double]] = {
+        val height = t.length
+        val width = t(0).length
+        val tt = Array.fill[Double](height, width)(Double.NaN)
+        for (i <- 0 until height)
+            for (j <- 0 until width) {
+                if (t(i)(j) > 0) tt(i)(j) = t(i)(j)
+            }
+        println("interpolate error:" + LaplaceInterpolation.interpolate(tt, 0.001))
+        tt
+    }
+
+    def uniform(tt: Array[Array[Double]], m: Array[Array[Array[Double]]]): Unit = {
+        val height = tt.length
+        val width = tt(0).length
+        val sigma = 3
+        //Math.sqrt(Util.sqr(height)+Util.sqr(width))*0.015
+        val n_epoch = 1
+        for (ep <- 0 until n_epoch) {
+            for (i <- 0 until height)
+                for (j <- 0 until width) {
+                    var sum = 0.0
+                    var sum_weight = 0.0
+                    val c0 = Vector(m(i)(j)(0), m(i)(j)(1), m(i)(j)(2))
+                    for (dx <- -10 to 10)
+                        for (dy <- -10 to 10)
+                            if (Util.inBoard(i + dx, j + dy, height, width)) {
+                                val tx = i + dx
+                                val ty = j + dy
+                                val ct = Vector(m(tx)(ty)(0), m(tx)(ty)(1), m(tx)(ty)(2))
+                                var weight = Util.gaussian(dx * dx + dy * dy, sigma) * (c0 - ct).sqr
+                                sum_weight += weight
+                                sum += tt(tx)(ty) * weight
+                            }
+                    tt(i)(j) = sum / sum_weight
+                }
+        }
     }
 }
 
