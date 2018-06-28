@@ -3,13 +3,14 @@ import java.awt.image.BufferedImage
 import java.io.File
 
 import javax.imageio.ImageIO
-import smile.interpolation.LaplaceInterpolation
 
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
 
 class Vector(var x: Double, var y: Double, var z: Double) {
     def sqr: Double = this * this
+
+    def *(v: Vector): Double = x * v.x + y * v.y + z * v.z
 
     override def toString: String = "(" + x + "," + y + "," + z + ")"
 
@@ -29,8 +30,6 @@ class Vector(var x: Double, var y: Double, var z: Double) {
     def angle(v: Vector): Double = {
         Math.acos(this * v / (norm * v.norm))
     }
-
-    def *(v: Vector): Double = x * v.x + y * v.y + z * v.z
 
     def norm(): Double = Math.sqrt(x * x + y * y + z * z)
 
@@ -52,7 +51,7 @@ class Patch(val x: Int, val y: Int) {
     def ransac(m: Array[Array[Array[Double]]]): Unit = {
         //        val points = Util.genDistinctRandomNumber(30, length * length)
         val threshold = 0.02
-        val n_pairs = 50
+        val n_pairs = 30
 
         var vx = Vector(0, 0, 0)
         var v1 = Vector(0, 0, 0)
@@ -111,7 +110,8 @@ class Patch(val x: Int, val y: Int) {
     }
 
     def test(m: Array[Array[Array[Double]]]): Boolean = {
-        significantLine() && positive_reflectance() && largeAngle() && unimodality() && closeIntersection() && validTransmission() && sufficientShading(m)
+        significantLine() && positive_reflectance() && largeAngle() && unimodality(m) && closeIntersection() &&
+            validTransmission() && sufficientShading(m)
     }
 
     def validTransmission(): Boolean = {
@@ -122,18 +122,25 @@ class Patch(val x: Int, val y: Int) {
     }
 
     def sufficientShading(m: Array[Array[Array[Double]]]): Boolean = {
-        var s = Vector(0, 0, 0)
+        //        return true
+//        var s = Vector(0, 0, 0)
+
+        var s = 0.0
         var s2 = 0.0
         var tx, ty = 0
         for (dx <- 0 until length)
             for (dy <- 0 until length) {
                 tx = x + dx
                 ty = y + dy
-                s2 += Vector(m(tx)(ty)(0), m(tx)(ty)(1), m(tx)(ty)(2)).square
-                if (significant(dx)(dy)) s += Vector(m(tx)(ty)(0), m(tx)(ty)(1), m(tx)(ty)(2))
+                val v = (Vector(m(tx)(ty)(0), m(tx)(ty)(1), m(tx)(ty)(2)) - lineV) * lineD
+//                s2 += Vector(m(tx)(ty)(0), m(tx)(ty)(1), m(tx)(ty)(2)).sqr
+                s2 += v
+                if (significant(dx)(dy))
+//                    s += Vector(m(tx)(ty)(0), m(tx)(ty)(1), m(tx)(ty)(2))
+                    s += v
             }
         val avg = s / n_omega
-        val omega_variance = (s2 - n_omega * avg.square) / (n_omega - 1)
+        val omega_variance = (s2 - n_omega * avg * avg) / (n_omega - 1)
 //        return true
         if (Math.sqrt(omega_variance) / transmission < 0.02) false else true
     }
@@ -160,8 +167,41 @@ class Patch(val x: Int, val y: Int) {
         if (d > 0.05) false else true
     }
 
-    def unimodality(): Boolean = {
-        true
+    def unimodality(m: Array[Array[Array[Double]]]): Boolean = {
+        //                return true
+        var minv = 10000.0
+        var maxv = 10000.0
+        var s_angle = 0.0
+        for (dx <- 0 until length)
+            for (dy <- 0 until length)
+                if (significant(dx)(dy)) {
+                    val tx = x + dx
+                    val ty = y + dy
+                    val v = (Vector(m(tx)(ty)(0), m(tx)(ty)(1), m(tx)(ty)(2)) - lineV) * lineD
+                    var angle = v / (lineD.norm * (Vector(m(tx)(ty)(0), m(tx)(ty)(1), m(tx)(ty)(2)) - lineV).norm)
+                    if (angle > Math.PI / 2) angle = Math.PI - angle
+                    s_angle += angle
+                    if (v > maxv) maxv = v
+                    if (v < minv) minv = v
+                }
+//        if (s_angle / n_omega > Math.PI / 6)
+//            return false
+//        else
+//            return true
+        val a = 1 / (maxv - minv) * Math.PI
+        val b = -minv
+        var s = 0.0
+
+        for (dx <- 0 until length)
+            for (dy <- 0 until length)
+                if (significant(dx)(dy)) {
+                    val tx = x + dx
+                    val ty = y + dy
+                    val v = (Vector(m(tx)(ty)(0), m(tx)(ty)(1), m(tx)(ty)(2)) - lineV) * lineD
+                    s += Math.cos(a * (v + b) - Math.PI)
+                }
+
+        if (s / n_omega > 0.07) false else true
     }
 
     def significantLine(): Boolean = {
@@ -192,7 +232,7 @@ class Patch(val x: Int, val y: Int) {
                 tx = dx + x
                 ty = dy + y
                 if (significant(dx)(dy)) {
-                    t(tx)(ty) = (t(tx)(ty) * countT(tx)(ty) + transmission) / (countT(tx)(ty) + 1) * 1.5
+                    t(tx)(ty) = (t(tx)(ty) * countT(tx)(ty) + transmission) / (countT(tx)(ty) + 1) * 1.35
                     if (t(tx)(ty) > 1) t(tx)(ty) = 1
 //                    println(t(tx)(ty))
                     countT(tx)(ty) += 1
@@ -235,24 +275,19 @@ object Util {
 }
 
 object Dehaze {
-    val filename = "/Users/qzq/code/DehazingUsingColorLines/tam.png"
-    val outputFilename = "/Users/qzq/code/DehazingUsingColorLines/out.jpg"
-    //            var A = Vector(0.94, 0.97, 0.986)
-//    var A = Vector(0.65, 0.7, 0.71)
-//    var A = Vector(0.9, 0.97, 0.988)
-//var A = Vector(0.755, 0.77, 0.77)
-//var A = Vector(0.67, 0.67, 0.66)
-    var A = Vector(0.76 ,0.724 ,0.62)
-//    var A = Vector(0.81, 0.81, 0.82)
-//    var A = Vector(0.8, 0.8, 0.816)
-//    var A = Vector(0.53 ,0.53 ,0.53)
-//var A = Vector(0.575, 0.6125 ,0.7)
+//    val filename = "/Users/qzq/code/DehazingUsingColorLines/dubai.png"
+//    val outputFilename = "/Users/qzq/code/DehazingUsingColorLines/out.jpg"
+    var A = Vector(0.65, 0.7, 0.71)
 
     def main(args: Array[String]): Unit = {
-//        A.x = scala.io.StdIn.readDouble()
-//        A.y = scala.io.StdIn.readDouble()
-//        A.z = scala.io.StdIn.readDouble()
-
+        val filename = io.StdIn.readLine("input image file path:")
+        val outputFilename = io.StdIn.readLine("output image file path:")
+        println("input vector A.R")
+        A.x = io.StdIn.readDouble()
+        println("input vector A.G")
+        A.y = io.StdIn.readDouble()
+        println("input vector A.B")
+        A.z = io.StdIn.readDouble()
         val photo = ImageIO.read(new File(filename))
         val dehazed = dehaze(photo, A.x, A.y, A.z)
         ImageIO.write(dehazed, "png", new File(outputFilename))
@@ -297,7 +332,8 @@ object Dehaze {
         println("interpolating ...")
         //        var tt = laplacianInterpolation(t)
 //        uniform(tt, m)
-val tt = gradientDecent(t, m)
+        smooth(t)
+        val tt = gradientDecent(t, m)
 
 //        val tt = Array.fill[Double](height, width)(0.8)
         println("recovering ...")
@@ -317,6 +353,31 @@ val tt = gradientDecent(t, m)
         ImageIO.write(im_t, "png", new File("t.png"))
         ImageIO.write(im_tt, "png", new File("tt.png"))
         image
+    }
+
+    def smooth(t: Array[Array[Double]]): Unit = {
+        val r = 25
+        val threshold = 0.4
+        val height = t.length
+        val width = t(0).length
+        for (i <- 0 until height)
+            for (j <- 0 until width) {
+                if (t(i)(j) < 0.3) {
+                    var sh = 0
+                    var sl = 0
+                    for (dx <- -r to r)
+                        for (dy <- -r to r) {
+                            val tx = i + dx
+                            val ty = j + dy
+                            if (Util.inBoard(tx, ty, height, width)) {
+                                if (t(tx)(ty) > threshold) sh += 1
+                                if (t(tx)(ty) > 0 && t(tx)(ty) < threshold) sl += 1
+                            }
+                        }
+                    if (sh > sl)
+                        t(i)(j) = 0
+                }
+            }
     }
 
     def findPatches(dx: Int, dy: Int, m: Array[Array[Array[Double]]]): ListBuffer[Patch] = {
@@ -394,8 +455,7 @@ val tt = gradientDecent(t, m)
                                 if (Util.inBoard(tx, ty, height, width)) {
                                     val Ix = Vector(m(i)(j)(0), m(i)(j)(1), m(i)(j)(2))
                                     val Iy = Vector(m(tx)(ty)(0), m(tx)(ty)(1), m(tx)(ty)(2))
-                                    gradient(i)(j) += 0.02 * (t(i)(j) - t(tx)(ty)) / ((Ix - Iy).sqr + 0.005) /// Math
-                                        //.sqrt(dx * dx + dy * dy)
+                                    gradient(i)(j) += 0.015 * (t(i)(j) - t(tx)(ty)) / ((Ix - Iy).sqr + 0.002) / Math.sqrt(dx * dx + dy * dy)
 //                                    println("N",2 * (t(i)(j) - t(tx)(ty)) / ((Ix - Iy).sqr+0.5))
 //                                    if (Math.abs(2 * (t(i)(j) - t(tx)(ty)) / ((Ix - Iy).sqr+0.5)) < 0.0001)
 //                                        println(t(i)(j), t(tx)(ty))
@@ -416,7 +476,7 @@ val tt = gradientDecent(t, m)
                     }
                     if (t(i)(j) > 1) {
                         t(i)(j) = 1
-                        println(lr * gradient(i)(j))
+//                        println(lr * gradient(i)(j))
                     }
                 }
             lr *= decay_rate
@@ -432,7 +492,7 @@ val tt = gradientDecent(t, m)
             for (j <- 0 until width) {
                 if (t(i)(j) > 0) tt(i)(j) = t(i)(j)
             }
-        println("interpolate error:" + LaplaceInterpolation.interpolate(tt, 0.001))
+//        println("interpolate error:" + LaplaceInterpolation.interpolate(tt, 0.001))
         tt
     }
 
