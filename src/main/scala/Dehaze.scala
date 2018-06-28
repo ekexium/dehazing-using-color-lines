@@ -115,9 +115,6 @@ class Patch(val x: Int, val y: Int) {
     }
 
     def validTransmission(): Boolean = {
-//        if (transmission > 1) transmission = 1
-//        if (transmission < 0) transmission = 0
-//        return true
         if (transmission < 0 || transmission > 1) false else true
     }
 
@@ -147,7 +144,6 @@ class Patch(val x: Int, val y: Int) {
 
     def closeIntersection(): Boolean = {
         import Dehaze.A
-        //        lineD = lineD / lineD.norm
         val D = lineD / lineD.norm
         val A_ = A / A.norm
         val V = lineV
@@ -159,16 +155,12 @@ class Patch(val x: Int, val y: Int) {
         val s = (-DV * AD + AV) / (1 - AD * AD) / A.norm
 
         transmission = 1 - s
-        //        println("t", transmission)
         val v = lineD * l + V - A * s
         val d = v * v
-//        println(transmission, d)
-//        return true
         if (d > 0.05) false else true
     }
 
     def unimodality(m: Array[Array[Array[Double]]]): Boolean = {
-        //                return true
         var minv = 10000.0
         var maxv = 10000.0
         var s_angle = 0.0
@@ -184,10 +176,6 @@ class Patch(val x: Int, val y: Int) {
                     if (v > maxv) maxv = v
                     if (v < minv) minv = v
                 }
-//        if (s_angle / n_omega > Math.PI / 6)
-//            return false
-//        else
-//            return true
         val a = 1 / (maxv - minv) * Math.PI
         val b = -minv
         var s = 0.0
@@ -206,26 +194,22 @@ class Patch(val x: Int, val y: Int) {
 
     def significantLine(): Boolean = {
         n_omega = significant.map(x => x.map(y => if (y) 1 else 0).sum).sum
-//        println(n_omega)
         if (n_omega > length * length * 2 / 5) true
         else false
     }
 
     def positive_reflectance(): Boolean = {
-//        x is set > 0
         if (lineD.y > 0 && lineD.z > 0) true
         else false
     }
 
     def largeAngle(): Boolean = {
         import Dehaze.A
-//        return true
-        if ((A angle lineD) > Math.PI / 12/*12*/ ) true
+        if ((A angle lineD) > Math.PI / 12 ) true
         else false
     }
 
     def calcTransmission(t: Array[Array[Double]], countT: Array[Array[Int]]): Unit = {
-        //        println(transmission)
         var tx, ty = 0
         for (dx <- 0 until length)
             for (dy <- 0 until length) {
@@ -234,7 +218,6 @@ class Patch(val x: Int, val y: Int) {
                 if (significant(dx)(dy)) {
                     t(tx)(ty) = (t(tx)(ty) * countT(tx)(ty) + transmission) / (countT(tx)(ty) + 1) * 1.35
                     if (t(tx)(ty) > 1) t(tx)(ty) = 1
-//                    println(t(tx)(ty))
                     countT(tx)(ty) += 1
                 }
             }
@@ -261,7 +244,6 @@ object Util {
     }
 
     def distance(vx: Vector, v1: Vector, v2: Vector): Double = {
-//        ((vx - v1) - (v2 - v1) * ((vx - v1) * (v2 - v1)) / (v2 - v1).norm).norm()
         Math.abs(((v2 - v1) x (v1 - vx) / (v2 - v1).norm).norm())
     }
 
@@ -313,7 +295,6 @@ object Dehaze {
         for (dx <- Seq(0, 3))
             for (dy <- Seq(0, 3)) {
                 var patches = findPatches(dx, dy, m)
-//                println("num of patches = " + patches.size)
 
 //				find significant pixels
                 println("ransac ...")
@@ -330,15 +311,11 @@ object Dehaze {
 
         //		interpolate and regularization
         println("interpolating ...")
-        //        var tt = laplacianInterpolation(t)
-//        uniform(tt, m)
         smooth(t)
         val tt = gradientDecent(t, m)
 
-//        val tt = Array.fill[Double](height, width)(0.8)
         println("recovering ...")
         val pixels = recover(m, tt, AR, AG, AB)
-//        val pixels = t
 
         println("generating image ...")
         val im_t = new BufferedImage(height, width, BufferedImage.TYPE_3BYTE_BGR)
@@ -446,7 +423,6 @@ object Dehaze {
             for (i <- 0 until height)
                 for (j <- 0 until width) {
                     gradient(i)(j) = 1 * (t(i)(j) - raw_t(i)(j)) / sigma(i)(j)
-//                    println("A",2 * (t(i)(j) - raw_t(i)(j)) / sigma(i)(j))
                     for (dx <- -r to r)
                         for (dy <- -r to r)
                             if (dx != 0 || dy != 0) {
@@ -456,9 +432,6 @@ object Dehaze {
                                     val Ix = Vector(m(i)(j)(0), m(i)(j)(1), m(i)(j)(2))
                                     val Iy = Vector(m(tx)(ty)(0), m(tx)(ty)(1), m(tx)(ty)(2))
                                     gradient(i)(j) += 0.015 * (t(i)(j) - t(tx)(ty)) / ((Ix - Iy).sqr + 0.002) / Math.sqrt(dx * dx + dy * dy)
-//                                    println("N",2 * (t(i)(j) - t(tx)(ty)) / ((Ix - Iy).sqr+0.5))
-//                                    if (Math.abs(2 * (t(i)(j) - t(tx)(ty)) / ((Ix - Iy).sqr+0.5)) < 0.0001)
-//                                        println(t(i)(j), t(tx)(ty))
                                 }
                             }
                     if (gradient(i)(j) > 1) gradient(i)(j) = 1
@@ -472,11 +445,9 @@ object Dehaze {
                     t(i)(j) -= lr * gradient(i)(j)
                     if (t(i)(j) < 0) {
                         t(i)(j) = 0
-//                        println(lr * gradient(i)(j))
                     }
                     if (t(i)(j) > 1) {
                         t(i)(j) = 1
-//                        println(lr * gradient(i)(j))
                     }
                 }
             lr *= decay_rate
